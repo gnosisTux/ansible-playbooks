@@ -1,0 +1,12 @@
+# our usernames does not contain the domain part
+# so we need to enable this option
+allow_username_mismatch = true;
+
+# this configures the domain puffy.cafe to use the selector "dkim"
+# and where to find the private key
+domain {
+    {{ domain }} {
+        path = "{{ prefix }}/etc//mail/dkim/private/{{domain}}.key";
+        selector = "dkim";
+    }
+}

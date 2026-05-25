@@ -1,0 +1,50 @@
+## this defines the paths for the X509 certificate
+pki {{ domain }} cert "{{ certdir }}/fullchain.pem"
+pki {{ domain }} key "{{ certdir }}/privkey.pem"
+pki {{ domain }} dhe auto
+
+## this defines how the local part of email addresses can be split
+# defaults to '+', so solene+foobar@domain matches user
+# solene@domain. Due to the '+' character being a regular source of issues
+# with many online forms, I recommend using a character such as '_',
+# '.' or '-'. This feature is very handy to generate infinite unique emails
+# addresses without pre-defining aliases.
+# Using '_', solene_openbsd@domain and solene_buystuff@domain lead to the
+# same address
+smtp sub-addr-delim '_'
+
+## this defines an external filter
+# rspamd does dkim signing and spam filter
+{% if ansible_system == "OpenBSD" or ansible_system == "Linux" %}
+filter rspamd proc-exec "filter-rspamd"
+{% else %}
+filter rspamd proc-exec "opensmtpd-filter-rspamd"
+{% endif %}
+
+## this defines which file will contain aliases
+# this can be used to define groups or redirect emails to users
+{% if ansible_system == "Linux" %}
+table aliases file:/etc/aliases
+{% else %}
+table aliases file:/etc/mail/aliases
+{% endif %}
+
+## this defines all the ports to use
+# mask-src hides system hostname, username and public IP when sending an email
+listen on 0.0.0.0 port 25  tls         pki "{{ domain }}" filter "rspamd"
+listen on 0.0.0.0 port 465 smtps       pki "{{ domain }}" auth mask-src filter "rspamd"
+listen on 0.0.0.0 port 587 tls-require pki "{{ domain }}" auth mask-src filter "rspamd"
+
+## this defines actions
+# either deliver to lmtp or to an external server
+action "local" lmtp "{{ dovecot_socket }}" alias <aliases>
+action "outbound" relay
+
+## this defines what should be done depending on some conditions
+# receive emails (local or from external server for "{{ domain }}")
+match from any for domain "{{ domain }}" action "local"
+match from local for local action "local"
+
+# send email (from local or authenticated user)
+match from any auth for any action "outbound"
+match from local for any action "outbound"

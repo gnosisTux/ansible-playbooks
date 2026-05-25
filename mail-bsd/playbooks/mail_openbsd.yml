@@ -1,0 +1,101 @@
+---
+- name: Install and configure mail server (opensmtpd, dovecot, opendkim, rspamd) - OpenBSD
+  hosts: mail
+  remote_user: root
+  vars:
+    prefix: ""
+    smtpduser: "_smtpd"
+    rspamduser: "_rspamd"
+    dovecotuser: "_dovecot"
+    dh_path: "/etc/dovecot/dh.pem"
+    dovecot_socket: "/var/dovecot/lmtp"
+
+  tasks:
+    - name: Install required packages
+      community.general.openbsd_pkg:
+        name:
+          - rspamd--
+          - opensmtpd-filter-rspamd
+          - dovecot-pigeonhole--
+          - dovecot--
+          - py3-cryptography
+        state: present
+
+    - name: Deploy rspamd configuration
+      ansible.builtin.template:
+        src: templates/dkim_signing.conf.j2
+        dest: "/etc/rspamd/local.d/dkim_signing.conf"
+        owner: "{{ rspamduser }}"
+        group: "{{ rspamduser }}"
+        mode: '0640'
+
+    - name: Deploy OpenSMTPD configuration
+      ansible.builtin.template:
+        src: templates/smtpd.conf.j2
+        dest: "/etc/mail/smtpd.conf"
+        owner: "{{ smtpduser }}"
+        group: "{{ smtpduser }}"
+        mode: '0640'
+
+    - name: Deploy Dovecot configuration
+      ansible.builtin.template:
+        src: templates/dovecot2.3.conf.j2
+        dest: "/etc/dovecot/dovecot.conf"
+        owner: "{{ dovecotuser }}"
+        group: "{{ dovecotuser }}"
+        mode: '0640'
+
+    - name: Create DKIM directory
+      ansible.builtin.file:
+        path: "/etc/mail/dkim"
+        state: directory
+        mode: '0755'
+        owner: root
+
+    - name: Create DKIM private directory
+      ansible.builtin.file:
+        path: "/etc/mail/dkim/private"
+        state: directory
+        mode: '0750'
+        owner: root
+        group: "{{ rspamduser }}"
+
+    - name: Generate DKIM private key
+      community.crypto.openssl_privatekey:
+        path: "/etc/mail/dkim/private/{{ domain }}.key"
+        size: 2048
+        type: RSA
+        owner: root
+        group: "{{ rspamduser }}"
+        mode: '0440'
+
+    - name: Generate DKIM public key
+      community.crypto.openssl_publickey:
+        path: "/etc/mail/dkim/{{ domain }}.pub"
+        privatekey_path: "/etc/mail/dkim/private/{{ domain }}.key"
+        format: PEM
+        owner: root
+        mode: '0644'
+
+    - name: Create /etc/mail/mailname
+      ansible.builtin.copy:
+        content: "mail.{{ domain }}\n"
+        dest: "/etc/mail/mailname"
+
+    - name: Generate Diffie-Hellman parameters for Dovecot
+      community.crypto.openssl_dhparam:
+        path: "{{ dh_path }}"
+        size: 1024
+        owner: "{{ dovecotuser }}"
+        group: "{{ dovecotuser }}"
+        mode: '0400'
+
+    - name: Enable and start services
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: true
+      loop:
+        - dovecot
+        - smtpd
+        - rspamd
