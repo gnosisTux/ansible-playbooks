@@ -83,7 +83,7 @@ ansible-playbook -i inventory_example.ini -l mail playbooks/mail_openbsd.yml
 1. Installs packages: `opensmtpd`, `dovecot`, `dovecot-pigeonhole`, `rspamd`, `opensmtpd-filter-rspamd`, and the Python `cryptography` library.
 2. Deploys configuration from Jinja2 templates for OpenSMTPD, Dovecot, and Rspamd.
 3. Creates the DKIM key directory structure and generates a 2048-bit RSA key pair.
-4. Generates Diffie-Hellman parameters for Dovecot (1024-bit).
+4. Generates Diffie-Hellman parameters for Dovecot (4096-bit).
 5. Enables and restarts `dovecot`, `smtpd`, and `rspamd`.
 
 ### Notable behaviour
