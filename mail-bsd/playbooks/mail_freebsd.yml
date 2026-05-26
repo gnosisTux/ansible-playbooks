@@ -87,7 +87,7 @@
     - name: Generate Diffie-Hellman parameters for Dovecot
       community.crypto.openssl_dhparam:
         path: "{{ dh_path }}"
-        size: 1024
+        size: 4096
         owner: "{{ dovecotuser }}"
         group: "{{ dovecotuser }}"
         mode: '0400'
