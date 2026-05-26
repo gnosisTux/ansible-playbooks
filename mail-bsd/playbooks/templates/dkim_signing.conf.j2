@@ -6,7 +6,7 @@ allow_username_mismatch = true;
 # and where to find the private key
 domain {
     {{ domain }} {
-        path = "{{ prefix }}/etc//mail/dkim/private/{{domain}}.key";
+        path = "{{ prefix }}/etc/mail/dkim/private/{{domain}}.key";
         selector = "dkim";
     }
 }
