@@ -25,7 +25,7 @@ userdb {
 
 #Fallback: Use plain old PAM to find user passwords
 passdb {
-{% if ansible_system == "OpenBSD" %}
+{% if ansible_facts['system'] == "OpenBSD" %}
     driver = bsdauth
 {% else %}
     driver = pam

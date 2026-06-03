@@ -2,8 +2,10 @@
 - name: Install and configure mail server (opensmtpd, dovecot, rspamd) - FreeBSD
   hosts: mail
   become: true
-  become_method: doas
+  become_method: community.general.doas
+  become_exe: /usr/local/bin/doas
   vars:
+    ansible_python_interpreter: /usr/local/bin/python3.11
     prefix: "/usr/local"
     smtpduser: "_smtpd"
     rspamduser: "rspamd"
@@ -36,7 +38,7 @@
           - dovecot-pigeonhole
           - rspamd
           - opensmtpd-filter-rspamd
-          - "py{{ ansible_python.version.major }}{{ ansible_python.version.minor }}-cryptography"
+          - "py{{ ansible_facts['python']['version']['major'] }}{{ ansible_facts['python']['version']['minor'] }}-cryptography"
         state: present
 
     - name: Deploy rspamd configuration

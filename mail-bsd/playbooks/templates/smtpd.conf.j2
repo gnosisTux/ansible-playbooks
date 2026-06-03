@@ -15,7 +15,7 @@ smtp sub-addr-delim '_'
 
 ## this defines an external filter
 # rspamd does dkim signing and spam filter
-{% if ansible_system == "OpenBSD" or ansible_system == "Linux" %}
+{% if ansible_facts['system'] == "OpenBSD" %}
 filter rspamd proc-exec "filter-rspamd"
 {% else %}
 filter rspamd proc-exec "opensmtpd-filter-rspamd"
@@ -23,11 +23,7 @@ filter rspamd proc-exec "opensmtpd-filter-rspamd"
 
 ## this defines which file will contain aliases
 # this can be used to define groups or redirect emails to users
-{% if ansible_system == "Linux" %}
-table aliases file:/etc/aliases
-{% else %}
 table aliases file:/etc/mail/aliases
-{% endif %}
 
 ## this defines all the ports to use
 # mask-src hides system hostname, username and public IP when sending an email
