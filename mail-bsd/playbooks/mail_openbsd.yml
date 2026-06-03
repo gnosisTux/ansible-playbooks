@@ -1,7 +1,8 @@
 ---
-- name: Install and configure mail server (opensmtpd, dovecot, opendkim, rspamd) - OpenBSD
+- name: Install and configure mail server (opensmtpd, dovecot, rspamd) - OpenBSD
   hosts: mail
-  remote_user: root
+  become: true
+  become_method: doas
   vars:
     prefix: ""
     smtpduser: "_smtpd"
@@ -10,9 +11,25 @@
     dh_path: "/etc/dovecot/dh.pem"
     dovecot_socket: "/var/dovecot/lmtp"
 
+  handlers:
+    - name: restart dovecot
+      ansible.builtin.service:
+        name: dovecot
+        state: restarted
+
+    - name: restart smtpd
+      ansible.builtin.service:
+        name: smtpd
+        state: restarted
+
+    - name: restart rspamd
+      ansible.builtin.service:
+        name: rspamd
+        state: restarted
+
   tasks:
     - name: Install required packages
-      community.general.openbsd_pkg:
+      ansible.builtin.package:
         name:
           - rspamd--
           - opensmtpd-filter-rspamd
@@ -28,6 +45,7 @@
         owner: "{{ rspamduser }}"
         group: "{{ rspamduser }}"
         mode: '0640'
+      notify: restart rspamd
 
     - name: Deploy OpenSMTPD configuration
       ansible.builtin.template:
@@ -36,6 +54,7 @@
         owner: "{{ smtpduser }}"
         group: "{{ smtpduser }}"
         mode: '0640'
+      notify: restart smtpd
 
     - name: Deploy Dovecot configuration
       ansible.builtin.template:
@@ -44,6 +63,7 @@
         owner: "{{ dovecotuser }}"
         group: "{{ dovecotuser }}"
         mode: '0640'
+      notify: restart dovecot
 
     - name: Create DKIM directory
       ansible.builtin.file:
@@ -68,6 +88,7 @@
         owner: root
         group: "{{ rspamduser }}"
         mode: '0440'
+      notify: restart rspamd
 
     - name: Generate DKIM public key
       community.crypto.openssl_publickey:
@@ -89,11 +110,12 @@
         owner: "{{ dovecotuser }}"
         group: "{{ dovecotuser }}"
         mode: '0400'
+      notify: restart dovecot
 
     - name: Enable and start services
       ansible.builtin.service:
         name: "{{ item }}"
-        state: restarted
+        state: started
         enabled: true
       loop:
         - dovecot

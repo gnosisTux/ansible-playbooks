@@ -4,11 +4,11 @@ Ansible playbooks to install and configure a full mail stack on **OpenBSD** and 
 
 ## Stack
 
-| Component  | Role                            |
-|------------|---------------------------------|
-| OpenSMTPD  | MTA (send/receive, ports 25/465/587) |
-| Dovecot 2.3 | IMAP server + Sieve filtering  |
-| Rspamd     | Spam filtering and DKIM signing |
+| Component   | Role                                 |
+|-------------|--------------------------------------|
+| OpenSMTPD   | MTA (send/receive, ports 25/465/587) |
+| Dovecot 2.3 | IMAP server + Sieve filtering        |
+| Rspamd      | Spam filtering and DKIM signing      |
 
 > **Note:** These playbooks target Dovecot 2.3, the version currently available in both FreeBSD and OpenBSD ports trees. They will be updated once Dovecot 2.4 is available.
 
@@ -19,17 +19,16 @@ Ansible playbooks to install and configure a full mail stack on **OpenBSD** and 
 ### Control machine
 
 - Ansible 2.9+
-- Collection `community.general` (for `pkgng`)
-- Collection `community.crypto` (for key generation)
+- Collections `community.general` and `community.crypto`
 
 ```sh
-ansible-galaxy collection install community.general community.crypto
+ansible-galaxy collection install -r requirements.yml
 ```
 
 ### Target server
 
 - OpenBSD 7.x or FreeBSD 14.x
-- SSH access as `root`
+- A non-root user with privilege escalation configured (see [Privilege escalation](#privilege-escalation))
 - TLS certificates already present at the path defined by `certdir` (see Variables):
 
 ```
@@ -41,12 +40,54 @@ ansible-galaxy collection install community.general community.crypto
 
 The playbook does **not** manage firewall rules (`pf.conf`). Open these ports manually before running:
 
-| Port | Protocol | Purpose                        |
-|------|----------|--------------------------------|
-| 25   | TCP      | SMTP (incoming mail)           |
-| 465  | TCP      | SMTPS (authenticated clients)  |
-| 587  | TCP      | SMTP submission (clients)      |
-| 993  | TCP      | IMAPS (Dovecot)                |
+| Port | Protocol | Purpose                       |
+|------|----------|-------------------------------|
+| 25   | TCP      | SMTP (incoming mail)          |
+| 465  | TCP      | SMTPS (authenticated clients) |
+| 587  | TCP      | SMTP submission (clients)     |
+| 993  | TCP      | IMAPS (Dovecot)               |
+
+---
+
+## Privilege escalation
+
+The playbooks use `become: true` with `become_method: doas`. Neither playbook connects as root directly.
+
+Before running, prepare the target server:
+
+**1. Create a user in the `wheel` group:**
+
+```sh
+# FreeBSD
+pw useradd ansible -m -s /bin/sh -G wheel
+
+# OpenBSD
+useradd -m -s /bin/sh -G wheel ansible
+```
+
+**2. Configure doas:**
+
+```sh
+# /etc/doas.conf
+permit nopass ansible as root
+```
+
+**3. Add your SSH public key:**
+
+```sh
+mkdir -p /home/ansible/.ssh
+echo "your_public_key" >> /home/ansible/.ssh/authorized_keys
+chmod 700 /home/ansible/.ssh
+chmod 600 /home/ansible/.ssh/authorized_keys
+chown -R ansible /home/ansible/.ssh
+```
+
+**4. Set `ansible_user` in your inventory:**
+
+```ini
+[mail]
+192.168.1.42 certdir=/etc/ssl/mail domain=domain.tld ansible_user=ansible
+```
 
 ---
 
@@ -56,13 +97,14 @@ Variables are defined per host in the inventory file. See `inventory_example.ini
 
 ```ini
 [mail]
-192.168.1.42 certdir=/etc/ssl/mail domain=domain.tld
+192.168.1.42 certdir=/etc/ssl/mail domain=domain.tld ansible_user=ansible
 ```
 
-| Variable  | Description                                      | Example          |
-|-----------|--------------------------------------------------|------------------|
-| `certdir` | Directory containing the TLS certificate files   | `/etc/ssl/mail`  |
-| `domain`  | Mail domain                                      | `domain.tld`     |
+| Variable       | Description                                    | Example          |
+|----------------|------------------------------------------------|------------------|
+| `certdir`      | Directory containing the TLS certificate files | `/etc/ssl/mail`  |
+| `domain`       | Mail domain                                    | `domain.tld`     |
+| `ansible_user` | Non-root user with doas configured             | `ansible`        |
 
 ---
 
@@ -84,7 +126,7 @@ ansible-playbook -i inventory_example.ini -l mail playbooks/mail_openbsd.yml
 2. Deploys configuration from Jinja2 templates for OpenSMTPD, Dovecot, and Rspamd.
 3. Creates the DKIM key directory structure and generates a 2048-bit RSA key pair.
 4. Generates Diffie-Hellman parameters for Dovecot (4096-bit).
-5. Enables and restarts `dovecot`, `smtpd`, and `rspamd`.
+5. Enables services on first run; restarts them only when configuration changes.
 
 ### Notable behaviour
 
@@ -99,12 +141,12 @@ ansible-playbook -i inventory_example.ini -l mail playbooks/mail_openbsd.yml
 
 ## DNS records
 
-| Type | Name                         | Value                               |
-|------|------------------------------|-------------------------------------|
-| A    | `mail.domain.tld`            | `<your server IP>`                  |
-| MX   | `domain.tld`                 | `10 mail.domain.tld`                |
-| TXT  | `domain.tld`                 | `v=spf1 mx a:mail.domain.tld -all`  |
-| TXT  | `dkim._domainkey.domain.tld` | `v=DKIM1; k=rsa; p=<public key>`    |
+| Type | Name                         | Value                              |
+|------|------------------------------|------------------------------------|
+| A    | `mail.domain.tld`            | `<your server IP>`                 |
+| MX   | `domain.tld`                 | `10 mail.domain.tld`               |
+| TXT  | `domain.tld`                 | `v=spf1 mx a:mail.domain.tld -all` |
+| TXT  | `dkim._domainkey.domain.tld` | `v=DKIM1; k=rsa; p=<public key>`   |
 
 ### Getting the DKIM public key
 
