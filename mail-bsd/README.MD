@@ -27,7 +27,7 @@ ansible-galaxy collection install -r requirements.yml
 
 ### Target server
 
-- OpenBSD 7.x or FreeBSD 14.x
+- OpenBSD 7.x or FreeBSD 14.x / 15.x
 - A non-root user with privilege escalation configured (see [Privilege escalation](#privilege-escalation))
 - TLS certificates already present at the path defined by `certdir` (see Variables):
 
@@ -68,8 +68,9 @@ useradd -m -s /bin/sh -G wheel ansible
 **2. Configure doas:**
 
 ```sh
-# /etc/doas.conf
-permit nopass ansible as root
+# /usr/local/etc/doas.conf (FreeBSD)
+# /etc/doas.conf (OpenBSD)
+permit keepenv nopass ansible as root
 ```
 
 **3. Add your SSH public key:**
@@ -82,7 +83,15 @@ chmod 600 /home/ansible/.ssh/authorized_keys
 chown -R ansible /home/ansible/.ssh
 ```
 
-**4. Set `ansible_user` in your inventory:**
+**4. FreeBSD only — create a Python symlink:**
+
+Due to a known Ansible bug, the module interpreter is not correctly propagated through `doas` on FreeBSD. Run this once before the playbook:
+
+```sh
+ln -s /usr/local/bin/python3.11 /usr/bin/python3
+```
+
+**5. Set `ansible_user` in your inventory:**
 
 ```ini
 [mail]
@@ -100,11 +109,11 @@ Variables are defined per host in the inventory file. See `inventory_example.ini
 192.168.1.42 certdir=/etc/ssl/mail domain=domain.tld ansible_user=ansible
 ```
 
-| Variable       | Description                                    | Example          |
-|----------------|------------------------------------------------|------------------|
-| `certdir`      | Directory containing the TLS certificate files | `/etc/ssl/mail`  |
-| `domain`       | Mail domain                                    | `domain.tld`     |
-| `ansible_user` | Non-root user with doas configured             | `ansible`        |
+| Variable       | Description                                    | Example         |
+|----------------|------------------------------------------------|-----------------|
+| `certdir`      | Directory containing the TLS certificate files | `/etc/ssl/mail` |
+| `domain`       | Mail domain                                    | `domain.tld`    |
+| `ansible_user` | Non-root user with doas configured             | `ansible`       |
 
 ---
 
@@ -182,3 +191,4 @@ Paste the output as the value of `p=` in the `dkim._domainkey` TXT record.
 ## Known issues / TODO
 
 - [ ] Update to Dovecot 2.4 once available in ports.
+- [ ] Investigate Ansible bug with `doas` and module interpreter propagation on FreeBSD to remove the Python symlink workaround.
